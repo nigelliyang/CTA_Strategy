@@ -31,8 +31,9 @@ def loaddata(file):
 
 def loadwdata(filename):
     #filepath = '../winddata/J00.DCE.csv'
-    #不能有filename！！
+    #不能有filenpath！！
     df = pd.read_csv(filename, index_col=0)
+    print "加载数据完成"
     return df
 
 ###----------------------------------------------------------------------
@@ -52,7 +53,7 @@ def runstrategy(filename,m,n):
     #交易记录
     Openorder = np.zeros(len(bars),dtype=dict)
     Closeorder = np.zeros(len(bars),dtype=dict)
-
+    print "开始回测"
     # 选择短期5日均线、长期20日均线
     ShortLen = m
     LongLen = n
@@ -119,7 +120,7 @@ def runstrategy(filename,m,n):
                 Account[t] = (bars['CLOSE'].values[t]-bars['CLOSE'].values[t-1])*Pos[t-1]
             if Pos[t-1] == -1:
                 Pos[t] = 0
-                Openorder[t] = [{'Type': 1,'Closepos':bars['CLOSE'].values[t],'Vol':1, 'Time': bars.index[t]}]
+                Closeorder[t] = [{'Type': 1,'Closepos':bars['CLOSE'].values[t],'Vol':1, 'Time': bars.index[t]}]
                 Account[t] = (bars['CLOSE'].values[t]-bars['CLOSE'].values[t-1])*Pos[t-1]
 
 ###----------------------------------------------------------------------
@@ -130,9 +131,10 @@ def runstrategy(filename,m,n):
     Record = np.array([bars['CLOSE'].values,Pos,Account,AccountCum,Openorder,Closeorder]).T
     Accountsummny = pd.DataFrame(index = bars.index,data=Record,
                                 columns=['Close','Pos','Account','AccountCum','Openorder','Closeorder'])
+    print "回测结束"
     return Accountsummny
 
 ###-----------------------------------------------------------------------------
 if __name__ == '__main__':
     from BacktestDemo import *
-    Accountsummny = runstrategy('..winddata/J00.DCE.csv',5,20)
+    Accountsummny = runstrategy('../winddata/J00.DCE.csv',5,10)

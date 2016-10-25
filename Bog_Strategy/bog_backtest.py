@@ -41,11 +41,12 @@ def backtest(m, n, file):
   ### 先加载数据
   #df = loaddata('inputDataOHLCDaily_20120517.mat')
   df = loadwdata(file)
+
   entryZscore=m
   stddays=n
 
   dailyret = df['CLOSE'].pct_change()
-  movingstd = dailyret.rolling(90).std().shift()
+  movingstd = dailyret.rolling(n).std().shift()
 
   ## 观测开盘价，过高或过低
 
