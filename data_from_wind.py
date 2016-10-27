@@ -24,3 +24,15 @@ for sym in symlist:
     fm.to_csv('winddata/'+sym+'.csv')
     print sym +'is done'
 print 'Congratulations, all data is loaded'
+###-------------------------------------------------------------
+for sym in symlist:
+    w_data=w.wsi(sym, "open,high,low,close,volume,amt",
+             "2012-09-20 20:00:00", "2016-10-20 16:00:00",
+             "BarSize=5","Fill=Previous")
+    #演示如何将api返回的数据J00.DCE装入Pandas的DataFrame
+    fm=pd.DataFrame(w_data.Data,index=w_data.Fields,columns=w_data.Times)
+    fm=fm.T #将矩阵转置
+    # 存为csv格式
+    fm.to_csv('winddata/min60/night/'+sym+"min60"+'.csv')
+    print sym+'done'
+

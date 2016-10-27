@@ -59,7 +59,7 @@ def runstrategy(window,filenameA,filenameB):
     y = dfB['CLOSE']
 
     ## 滚动回归
-    #window = 20
+    window = 30
     beta = np.zeros(len(x)-window)
     for t in range(1,len(x)-window+1):
         x = sm.add_constant(x)
@@ -76,18 +76,18 @@ def runstrategy(window,filenameA,filenameB):
 
     # 回归到0出场，非最优
     entryZscore = 1.0
-    exitZscore = -1.0  # exitZscore is -1 better!
-
-    MA = yport.rolling(window).mean()
+    exitZscore = 0.0  # exitZscore is -1 better!
+    MA10 = yport.rolling(10).mean()
+    MA30 = yport.rolling(window).mean()
     MSTD = yport.rolling(window).std()
 
-    zScore=(yport-MA)/MSTD ### TODO:可以改为双均线的zscore
+    zScore=(MA10-MA30)/MSTD ### TODO:可以改为双均线的zscore
 
-    longsEntry = zScore < -entryZscore  # a long position means we should buy EWC
-    longsExit = zScore > -exitZscore
+    longsEntry = zScore <= -entryZscore  # a long position means we should buy EWC
+    longsExit = zScore >= -exitZscore
 
-    shortsEntry = zScore > entryZscore
-    shortsExit = zScore < exitZscore
+    shortsEntry = zScore >= entryZscore
+    shortsExit = zScore <= exitZscore
 
 
     poslongs = np.ones(len(yport))*100   ## TODO:需要想出一个办法，matlab可以用nan
@@ -113,11 +113,11 @@ def runstrategy(window,filenameA,filenameB):
     two_pos = pd.DataFrame(data=np.array([pos,pos]).T,
                            index=rolling_beta.index,columns=['x','y'])
     #positions=repmat(numUnits, [1 size(y2, 2)]).*[-hedgeRatio ones(size(hedgeRatio))].*y2
-    two_asset = pd.concat([-rolling_beta*x[window:],y[window:]],axis=1)
+    two_asset = pd.concat([-rolling_beta*x[window:],-y[window:]],axis=1)
     positions = two_asset.values*two_pos
 
     two_prices = pd.DataFrame(data=y2[window:,:],index=rolling_beta.index,columns=['x','y'])
-    two_ret = two_prices.pct_change(1)
+    two_ret = two_prices.pct_change()
     two_ret = two_ret.fillna(0)
     two_money = positions.shift(1)*two_ret
     pnl = two_money.sum(axis=1)

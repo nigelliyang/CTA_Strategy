@@ -45,8 +45,8 @@ def runstrategy(filename,m,n):
 
     close_time = [i[11:19] == '15:00:00' for i in bars.index]
     df_close = bars[np.array(close_time)].fillna(method='backfill')
-    open_time = [i[11:19] == '09:00:00' for i in bars.index]
-    df_open = bars[np.array(open_time)]
+    open_time = [i[11:19] == '21:05:00' for i in bars.index]
+    df_open = bars[np.array(open_time)].fillna(method='backfill')
 
     dailyret = df_close['close'].pct_change()
     movingstd = dailyret.rolling(n).std().shift()
@@ -57,7 +57,7 @@ def runstrategy(filename,m,n):
 
 ###--------------------------------------------------------------------------
 # 开始循环
-    for t in range(stddays*6-1, len(bars)):
+    for t in range(stddays*112-1, len(bars)):
         ## 判断bar为当日开盘价
         # 没有信号
         # 盈亏计算
@@ -71,12 +71,12 @@ def runstrategy(filename,m,n):
             Pos[t] = 0
             Account[t] = 0
         # 判断开盘
-        if bars.index[t][11:19] == '09:00:00':
-            
-            Signalbuy = bars['open'][t] <= bars['low'][t-7:t-1].min()*(1-entryZscore*movingstd[t/6])
+        if bars.index[t][11:19] == '21:05:00':
 
-            Signalsell = bars['open'][t] >= bars['high'][t-7:t-1].max()*(1+entryZscore*movingstd[t/6])
-            
+            Signalbuy = bars['open'][t] <= bars['low'][t-113:t-1].min()*(1-entryZscore*movingstd[t/112])
+
+            Signalsell = bars['open'][t] >= bars['high'][t-113:t-1].max()*(1+entryZscore*movingstd[t/112])
+
             if Signalbuy:
                 # 开仓做多，前一个Bar为前一天收盘前的最后一个bar，仓位会平掉，所以不用判断仓位
                 print bars.index[t],'buy'

@@ -42,10 +42,11 @@ def loadwdata(filename):
 
 def runstrategy(filename,m,n):
 
-    InitialE = 100000
+   
     #scale = 300
 
     bars = loadwdata(filename)
+    InitialE = bars['CLOSE'][0]
     # 仓位 Pos = 1 多头1手; Pos = 0 空仓; Pos = -1 空头一手
     Pos = np.zeros(len(bars))
     # 账户权益记录
