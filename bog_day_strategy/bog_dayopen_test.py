@@ -18,12 +18,12 @@ sns.set_style('whitegrid')
 
 ###--------------------------------------------------------------------------
 # 读取数据
-def runstrategy(filename,m,n):
+def runstrategy(filename,m,n,l):
 
     #df = pd.read_csv('../ts_data/J00.DCE.csv',index_col=0)
     df = pd.read_csv(filename,index_col=0)
 #------------------------------------------------------------------------------
-    InitialE = 100000
+    InitialE = df['close'][0]
     #scale = 300
     bars = df
     #bars = loadwdata(filename)
@@ -35,8 +35,9 @@ def runstrategy(filename,m,n):
     Openorder = np.zeros(len(bars),dtype=dict)
     Closeorder = np.zeros(len(bars),dtype=dict)
 
-    entryZscore = m
-    stddays = n
+    entryZscore1 = m
+    entryZscore2 = n
+    stddays = l
 
     dailyret = df['close'].pct_change()
     movingstd = dailyret.rolling(stddays).std().shift()
@@ -47,8 +48,8 @@ def runstrategy(filename,m,n):
     ##起始点可以设为n的后天。
     for t in range(len(bars)):
         # 条件判断
-        longs = df['open'][t] <= df['low'][t-1]*(1-entryZscore*movingstd[t])
-        shorts = df['open'][t] >= df['high'][t-1]*(1+entryZscore*movingstd[t])
+        longs = df['open'][t] <= df['low'][t-1]*(1-entryZscore2*movingstd[t])
+        shorts = df['open'][t] >= df['high'][t-1]*(1+entryZscore1*movingstd[t])
         # 如果没有信号，当天不开仓，权益不会发生变化
         if longs:
             #print bars.index[t],'buy'
@@ -71,14 +72,14 @@ def runstrategy(filename,m,n):
     Accountsummny = pd.DataFrame(index = bars.index,data=Record,
                                     columns=['Close','Pos','Account','AccountCum','Openorder','Closeorder'])
 
-    print "回测结束"
+    # print "回测结束"
     return Accountsummny
 
 ###-----------------------------------------------------------------------------
 
 if __name__ == '__main__':
     from bog_dayopen_test import *
-    pf, Accountsummny = runstrategy('../ts_data/M00.DCE.addopen.csv',0.1,90)
+    pf, Accountsummny = runstrategy('../ts_data/day/M.DCE.addopen.csv',0.1,0.1,60)
 
 
 
