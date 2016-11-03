@@ -16,22 +16,33 @@ sns.set_style('whitegrid')
 
 ###--------------------------------------------------------------------------
 # 读取数据
-def runstrategy(filename,start=False,end=False,m=0.35,n=0.07,l=0.25):
+def runstrategy(filename,start=False,end=False,tradingcost = 0.0,m=0.35,n=0.07,l=0.25):
     # 回测开始
     start_time = time.time()
-    #df = pd.read_csv('../ts_data/J00.DCE.csv',index_col=0)
+    #filename = '../../ts_data/1min/RB.SHF.1MIN_PLUS.csv'
     df = pd.read_csv(filename,index_col=0)
+    df['datetime'] = df.index.to_datetime()
     # 设置回测周期
     # 统一转换字符串为datatime
     if start:
         start = datetime.strptime(start,'%Y-%m-%d').date()
+        df = df[df['datetime']>=start]
     if end:
         end = datetime.strptime(end,'%Y-%m-%d').date()
-    df['datetime'] = df['datetime'].to_datetime()
-    bars = df[(df['datetime']>=start) & (df['datetime']<=end)]
+        df = df[df['datetime']<=end]
+
+    # 交易时间设置
+    StartTime = datetime.strptime('9:35',"%H:%M").time()
+    noontime = datetime.strptime('14:00',"%H:%M").time()
+    ExTime = datetime.strptime('14:45',"%H:%M").time()
+    # 直接在这里把夜盘时间排除
+    bars = df[[StartTime <= i.time() <= ExTime for i in df['datetime']]]
+
 
     # 以首日开盘价为初始资金
     InitialE = bars['close'][0]
+    # 考虑手续费
+    # tradingcost = 0.0
     # 仓位 Pos = 1 多头1手; Pos = 0 空仓; Pos = -1 空头一手
     Pos = np.zeros(len(bars))
     # 账户权益记录
@@ -39,9 +50,11 @@ def runstrategy(filename,start=False,end=False,m=0.35,n=0.07,l=0.25):
     # 交易记录
     Openorder = np.zeros(len(bars),dtype=dict)
     Closeorder = np.zeros(len(bars),dtype=dict)
-    # 交易时间设置
-    StartTime = datetime.strptime('9:05',"%H:%M").time()
-    ExTime = datetime.strptime('14:55',"%H:%M").time()
+
+
+    Lhigh = bars['Lhigh'].values
+    Lclose = bars['Lclose'].values
+    Llow = bars['Llow'].values
     # 参数设置
     f1 = m
     f2 = n
@@ -57,28 +70,36 @@ def runstrategy(filename,start=False,end=False,m=0.35,n=0.07,l=0.25):
     breab = views + f3 * (views - viewb)
     breas = viewb - f3 * (views - viewb)
 
+    highp = bars['high'].values
+    lowp = bars['low'].values
+    openp = bars['open'].values
+    closep = bars['close'].values
+    bid1 = bars['bid1'].values
+    ask1 = bars['ask1'].values
+
     ###-------------------------------------------------------------------------
     # 开始循环
-    for t, bar in enumerate(bars):
+    for t, bar in enumerate(bars['datetime']):
         """跳过第一天，并且在交易时间内交易"""
-        if bar['datetime'].date() > start:
-            if StartTime <= bar['datetime'].time() < ExTime:
+        firstday = bars['datetime'][0].date()
+        if bar.date() > firstday:
+            if StartTime <= bar.time() < ExTime:
                 """计算当日内最高价，最低价"""
-                if bar['datetime'].time() == StartTime:
-                    todayhigh = bar['high']
-                    todaylow = bar['low']
-                else:
-                    todayhigh = max(bars['high'].values[t],bars['high'].values[t-1])
-                    todaylow = min(bars['low'].values[t],bars['low'].values[t-1])
+                if bar.time() == StartTime:
+                    todayhigh = highp[t]
+                    todaylow = lowp[t]
+                if bar.time() > StartTime:
+                    todayhigh = max(highp[t],todayhigh)
+                    todaylow = min(lowp[t],todaylow)
                 ###-----------------------------------------------------------------
                 """没有信号"""
                 # 每日盈亏计算
                 if Pos[t-1] == 1:
                     Pos[t] = 1
-                    Account[t] = (bars['close'].values[t]-bars['close'].values[t-1])*Pos[t-1]
+                    Account[t] = (closep[t]-closep[t-1])*Pos[t]
                 if Pos[t-1] == -1:
                     Pos[t] = -1
-                    Account[t] = (bars['close'].values[t]-bars['close'].values[t-1])*Pos[t-1]
+                    Account[t] = (closep[t]-closep[t-1])*Pos[t]
                 if Pos[t-1] == 0:
                     Pos[t] = 0
                     Account[t] = 0
@@ -93,106 +114,77 @@ def runstrategy(filename,start=False,end=False,m=0.35,n=0.07,l=0.25):
                 4) 在空仓的情况下,如果盘中价格跌破突破卖出价,则采取趋势策略,即在该点位开仓做空。
                 """
                 ### TODO:盘中价格指的是什么？这里理解成的是每个bar的收盘价。
-                # 先判断平仓，后判断开仓，以防止信号闪烁
                 # 防止反复开仓
                 flag1 = 0
-                flag2 = 0
-
-                revershorts = todayhigh >= views and bars['low'][t] < reves
-                if revershorts:
+                #flag2 = 0
+                revershorts = todayhigh >= views[t] and lowp[t] <= reves[t]-30 and bar.time() <= noontime
+                if revershorts and bid1[t] != 0:
+                    ## 先平多，再做空
+                    if Pos[t-1] == 1:
+                        Pos[t] = -1
+                        entryprice = bid1[t]
+                        Closeorder[t] = {'Type':-1,'Closepos':entryprice,'Vol':1,'Time':bar}
+                        Openorder[t] = {'Type':-1,'Openpos':entryprice,'Vol':1,'Time':bar}
+                        Account[t] = (closep[t]-entryprice)*Pos[t]-entryprice*(Openorder[t]['Vol']+Closeorder[t]['Vol'])*tradingcost
+                        #flag1 = 1
                     ## 开仓做空
                     if Pos[t-1] == 0 and flag1 == 0:
                         Pos[t] = -1
-                        entryprice = bar['bid1']
-                        Openorder[t] = dict('Type': -1,
-                                            'Openpos':entryprice,
-                                            'Vol':1,
-                                            'Time': bar.index)
-                        Account[t] = (bar['close']-entryprice)*Pos[t]
+                        entryprice = bid1[t]
+                        Openorder[t] = {'Type':-1,'Openpos':entryprice,'Vol':1,'Time':bar}
+                        Account[t] = (closep[t]-entryprice)*Pos[t]-entryprice*Openorder[t]['Vol']*tradingcost
                         flag1 = 1
-                    ## 先平多，再做空
-                    if Pos[t-1] == 1 and flag1 == 0:
-                        Pos[t] ＝ -1
-                        entryprice = bar['bid1']
-                        Closeorder[t] = dict('Type': -1,
-                                            'Closepos':entryprice,
-                                            'Vol':1,
-                                            'Time': bar.index)
-                        Openorder[t] = dict('Type': -1,
-                                            'Openpos':entryprice,
-                                            'Vol':1,
-                                            'Time': bar.index)
-                        Account[t] = (bar['close']-entryprice)*Pos[t]
-                        flag1 = 1
-                reverlongs = todaylow >= viewb and bars['high'][t] > reveb
-                if reverlongs:
+
+                reverlongs = todaylow >= viewb[t] and highp[t] >= reveb[t]+30 and bar.time() <= noontime
+                if reverlongs and ask1[t] != 0:
+                    ## 先平空，再做多
+                    if Pos[t-1] == -1:
+                        Pos[t] = 1
+                        entryprice = ask1[t]
+                        Closeorder[t] = {'Type': 1,'Closepos':entryprice,'Vol':1,'Time': bar}
+                        Openorder[t] = {'Type': 1,'Openpos':entryprice,'Vol':1,'Time': bar}
+                        Account[t] = (closep[t]-entryprice)*Pos[t]-entryprice*(Openorder[t]['Vol']+Closeorder[t]['Vol'])*tradingcost
+                        #flag1 = 1
                     ## 开仓做多
                     if Pos[t-1] == 0 and flag1 == 0:
                         Pos[t] = 1
-                        entryprice = bar['ask1']
-                        Openorder[t] = dict('Type': 1,
-                                            'Openpos':entryprice,
-                                            'Vol':1,
-                                            'Time': bar.index)
-                        Account[t] = (bar['close']-entryprice)*Pos[t]
+                        entryprice = ask1[t]
+                        Openorder[t] = {'Type': 1,'Openpos':entryprice,'Vol':1,'Time': bar}
+                        Account[t] = (closep[t]-entryprice)*Pos[t]-entryprice*Openorder[t]['Vol']*tradingcost
                         flag1 = 1
-                    ## 先平空，再做多
-                    if Pos[t-1] == -1 and flag1 == 0:
-                        Pos[t] = 1
-                        entryprice = bar['ask1']
-                        Closeorder[t] = dict('Type': 1,
-                                            'Closepos':entryprice,
-                                            'Vol':1,
-                                            'Time': bar.index)
-                        Openorder[t] = dict('Type': 1,
-                                            'Openpos':entryprice,
-                                            'Vol':1,
-                                            'Time': bar.index)
-                        Account[t] = (bar['close']-entryprice)*Pos[t]
-                        flag1 = 1
-                if Pos[t-1] == 0 and flag1 == 0 and flag2 == 0:
-                    longs = bar['high'] >= breab
+                if Pos[t-1] == 0:
+                    longs = highp[t] >= breab[t] and bar.time() <= noontime
                     ## 空仓做多
-                    if longs:
+                    if longs and ask1[t] != 0 and flag1 == 0:
                         Pos[t] = 1
-                        entryprice = bar['ask1']
-                        Openorder[t] = dict('Type': 1,
-                                            'Openpos':entryprice,
-                                            'Vol':1,
-                                            'Time': bar.index)
-                        Account[t] = (bar['close']-entryprice)*Pos[t]
-                        flag2 = 1
+                        entryprice = ask1[t]
+                        Openorder[t] = {'Type': 1,'Openpos':entryprice,'Vol':1,'Time': bar}
+                        Account[t] = (closep[t]-entryprice)*Pos[t]-entryprice*Openorder[t]['Vol']*tradingcost
+                        flag1 = 1
                     ## 空仓做空
-                    shorts = bar['low'] <= breas
-                    if shorts:
+                    shorts = lowp[t] <= breas[t] and bar.time() <= noontime
+                    if shorts and bid1[t] != 0 and flag1 == 0:
                         Pos[t] = -1
-                        entryprice = bar['bid1']
-                        Openorder[t] = dict('Type': -1,
-                                            'Openpos':entryprice,
-                                            'Vol':1,
-                                            'Time': bar.index)
-                        Account[t] = (bar['close']-entryprice)*Pos[t]
-                        flag2 = 1
-            if bar['datetime'].time() == ExTime:
+                        entryprice = bid1[t]
+                        Openorder[t] = {'Type': -1,'Openpos':entryprice,'Vol':1,'Time': bar}
+                        Account[t] = (closep[t]-entryprice)*Pos[t]-entryprice*Openorder[t]['Vol']*tradingcost
+                        flag1 = 1
+            if bar.time() == ExTime:
                 ## 收盘平仓
                 if Pos[t-1] == 1:
                     Pos[t] = 0
-                    entryprice = bar['bid1']
-                    Openorder[t] = dict('Type': -1,
-                                        'Openpos':entryprice,
-                                        'Vol':1,
-                                        'Time': bar.index)
+                    entryprice = openp[t]
+                    Closeorder[t] = {'Type': -1,'Closepos':entryprice,'Vol':1,'Time': bar}
+                    Account[t] = -entryprice*Closeorder[t]['Vol']*tradingcost
                     # 收盘没有仓位！
                     #Account[t] = (bar['close']-entryprice)*Pos[t]
                 if Pos[t-1] == -1:
                     Pos[t] = 0
-                    entryprice = bar['ask1']
-                    Openorder[t] = dict('Type': 1,
-                                        'Openpos':entryprice,
-                                        'Vol':1,
-                                        'Time': bar.index)
+                    entryprice = openp[t]
+                    Closeorder[t] = {'Type': 1,'Closepos':entryprice,'Vol':1,'Time': bar}
+                    Account[t] = -entryprice*Closeorder[t]['Vol']*tradingcost
                 ## 未设止盈止损
-    
+
     ###----------------------------------------------------------------------
     # 汇总账户数据
     AccountCum = Account.cumsum()
@@ -211,4 +203,4 @@ def runstrategy(filename,start=False,end=False,m=0.35,n=0.07,l=0.25):
 
 if __name__ == '__main__':
     from Rb_test import *
-    Accountsummny = runstrategy('../../ts_data/1min/RB.SHF.1MIN_PLUS.csv',0.35, 0.07, 0.25)
+    Accountsummny = runstrategy('../../ts_data/1min/RB.SHF.1MIN_PLUS.csv')

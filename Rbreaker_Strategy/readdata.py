@@ -46,7 +46,7 @@ def conver_data(filename):
     ###--------------------------------------------------------------------------
 if __name__ == '__main__':
     from readdata import *
-    conver_data('RB.SHF')
+    conver_data('IF00')
 
 
 
