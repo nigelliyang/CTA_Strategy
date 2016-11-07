@@ -46,7 +46,7 @@ def conver_data(filename):
     ###--------------------------------------------------------------------------
 if __name__ == '__main__':
     from readdata import *
-    conver_data('IF00')
+    conver_data('SR.CZC')
 
 
 

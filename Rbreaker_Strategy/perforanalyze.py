@@ -55,9 +55,9 @@ def stratanalyz(Accountsummny,TradingCost=0.3/10000,save = False):
     cumret = (1+ret).cumprod()-1
 
     # 日度数据  TODO:判断时间回测时间周期
-    
+
     # 回测周期，开始结束时间
-    
+
     startday = Accountsummny.index[0]
     endday = Accountsummny.index[-1]
     #days = len(Accountsummny)
@@ -153,24 +153,28 @@ def stratanalyz(Accountsummny,TradingCost=0.3/10000,save = False):
     # 胜率
     Winrate = float(len(RateOfReturn[RateOfReturn>0]))/len(Closetrade)
 
-    pf = np.array([[u'开始时间',startday],
-               [u'结束时间', endday],
-                [u'年化收益率', format(APR,'.4%')],
-                [u'平均每年收益',format(Avg_Ann_Ret,'.2%')],
-                [u'年化波动率', format(Ann_Volatility,'.2%')],
-                [u'夏普率', Sharpe_ratio],
-                [u'最大回撤', format(maxDD,'.2%')],
-                [u'最大回撤周期', maxDDD],
-                [u'Calmar比率', calmar_ratio],
-                [u'交易次数', trades],
-                [u'盈亏比', payoff],
-                [u'胜率', format(Winrate,'.2%')]])
-    performance = pd.DataFrame(pf)
+    d = {
+         u'开始时间': startday,
+         u'结束时间': endday,
+         u'年化收益率': format(APR,'.4%'),
+         u'平均每年收益': format(Avg_Ann_Ret,'.2%'),
+         u'年化波动率': format(Ann_Volatility,'.2%'),
+         u'夏普率': Sharpe_ratio,
+         u'最大回撤': format(maxDD,'.2%'),
+         u'最大回撤周期': maxDDD,
+         u'Calmar比率': calmar_ratio,
+         u'交易次数': trades,
+         u'盈亏比': payoff,
+         u'胜率': format(Winrate,'.2%')
+    }
+    #performance = pd.DataFrame(pf)
+    performance = pd.DataFrame.from_dict(d, orient="index")
+
     #performance = performance.rename(columns={0: 'Performance'})
     ## 保存结果
     if save == True:
         performance.to_csv('perfornamc_summry.csv')
-    return performance,Pnl
+    return performance,Pnl,d
 
 ###-----------------------------------------------------------------------------
 """绘图保存"""
@@ -188,9 +192,9 @@ def ploter(Accountsummny, save=False):
     else:
         tdate = map(lambda x:datetime.strptime(x, '%Y/%m/%d').date(),
                     ret.index.values)
-    
+
     font = FontProperties(fname='/Library/Fonts/hwxh.ttf')  #  设置中文字体
-    
+
     plt.figure(1,figsize=(16,8))
     #pcumret = plt.subplot(1,1,1)
     plt.plot(tdate, cumret.values, color='b')
@@ -203,7 +207,7 @@ def ploter(Accountsummny, save=False):
     pprice.plot(tdate,price.values,color='r')
     pprice.legend(loc=0)
     pprice.set_ylabel(u'标的价格', fontproperties=font,fontsize=16)
-    
+
     ### 最大回撤
     plt.figure(2,figsize=(16,8))
     plt.ylabel(u"最大回撤", fontproperties=font,fontsize=16)
@@ -215,12 +219,12 @@ def ploter(Accountsummny, save=False):
     pdown.legend(loc=2)
     pdown.set_ylabel(u'累计收益率', fontproperties=font,fontsize=16)
     ### 每笔收益
-    _,Pnl = stratanalyz(Accountsummny)
+    _,Pnl,_ = stratanalyz(Accountsummny)
     plt.figure(3,figsize=(16,8))
     plt.ylabel(u"每笔盈亏", fontproperties=font,fontsize=16)
     plt.bar(range(len(Pnl)),Pnl ,color='b')
     plt.title(u"每笔盈亏", fontproperties=font,fontsize=16)
-    
+
     plt.show()
     if save == True:
         plt.savefig('Record.png')
