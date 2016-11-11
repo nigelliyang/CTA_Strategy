@@ -10,12 +10,9 @@ from datetime import datetime
 ##绘图库
 import matplotlib
 from matplotlib.font_manager import FontProperties
-
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set_style('whitegrid')
-
-font = FontProperties(fname='/Library/Fonts/hwxh.ttf')  #  设置中文字体
 
 ###-----------------------------------------------------------------------------
 
@@ -54,19 +51,11 @@ def stratanalyz(Accountsummny,TradingCost=0.0,save = False):
     cumret = (1+ret).cumprod()-1
 
     # 日度数据  TODO:判断时间回测时间周期
-
-    # 回测周期，开始结束时间
-
-    startday = Accountsummny.index[0]
-    endday = Accountsummny.index[-1]
-    days = len(Accountsummny)
-    ### TOTO:判断时间周期，252需要改
     APR = np.prod(1+ret)**(252./len(ret))-1
     Avg_Ann_Ret = 252*ret.mean()
     Ann_Volatility = np.sqrt(252)*ret.std()
     Sharpe_ratio = np.sqrt(252)*ret.mean()/ret.std()
     [maxDD,maxDDD,_]=MaxDD(cumret)
-    calmar_ratio = float(APR)/maxDD
     """--交易分析--"""
     Openorder = Accountsummny['Openorder']
     Closeorder = Accountsummny['Closeorder']
@@ -112,8 +101,8 @@ def stratanalyz(Accountsummny,TradingCost=0.0,save = False):
         self.tradeDict[tradeID] = trade
     '''
 
-    Opentrade = np.array([t for t in Openorder[Openorder != 0]])
-    Closetrade = np.array([t for t in Closeorder[Closeorder != 0]])
+    Opentrade = np.array([t[0] for t in Openorder[Openorder != 0]])
+    Closetrade = np.array([t[0] for t in Closeorder[Closeorder != 0]])
     CostSeries = np.zeros(len(Closetrade))
     NetMargin = np.zeros(len(Closetrade))
     RateOfReturn = np.zeros(len(Closetrade))
@@ -151,21 +140,17 @@ def stratanalyz(Accountsummny,TradingCost=0.0,save = False):
     # 胜率
     Winrate = float(len(RateOfReturn[RateOfReturn>0]))/len(Closetrade)
 
-    pf = np.array([[u'开始时间',startday],
-               [u'结束时间', endday],
-               [u'回测周期', days],
-                [u'年化收益率', format(APR,'.4%')],
-                [u'平均每年收益',format(Avg_Ann_Ret,'.2%')],
-                [u'年化波动率', format(Ann_Volatility,'.2%')],
-                [u'夏普率', Sharpe_ratio],
-                [u'最大回撤', format(maxDD,'.2%')],
-                [u'最大回撤周期', maxDDD],
-                [u'Calmar比率', calmar_ratio],
-                [u'交易次数', trades],
-                [u'盈亏比', payoff],
-                [u'胜率', format(Winrate,'.2%')]])
-    performance = pd.DataFrame(pf)
-    #performance = performance.rename(columns={0: 'Performance'})
+    pf = dict((['APR', format(APR,'.4%')],
+                ['Ann_Ann_Ret',format(Avg_Ann_Ret,'.2%')],
+                ['Ann_Volatility', format(Ann_Volatility,'.2%')],
+                ['Sharpe_ratio', Sharpe_ratio],
+                ['maxDD', format(maxDD,'.2%')],
+                ['maxDDD', maxDDD],
+                ['trades', trades],
+                ['payoff', payoff],
+                ['Winrate', format(Winrate,'.2%')]))
+    performance = pd.DataFrame.from_dict(pf, orient="index")
+    performance = performance.rename(columns={0: 'Performance'})
     ## 保存结果
     if save == True:
         performance.to_csv('perfornamc_summry.csv')
@@ -176,50 +161,49 @@ def stratanalyz(Accountsummny,TradingCost=0.0,save = False):
 
 def ploter(Accountsummny, save=False):
     price = Accountsummny['Close']
-    ret = Accountsummny['Account']/Accountsummny['AccountCum'].shift()
+    ret = Accountsummny['Account']/Accountsummny['Close'].shift()
     ret = ret.fillna(0)
 
     cumret = (1+ret).cumprod()-1
 
+    name = matplotlib.matplotlib_fname()
+    font = FontProperties(fname = name)
     if len(ret.index.values[0]) >= 12:
         tdate = map(lambda x:datetime.strptime(x[:-4], '%Y-%m-%d %H:%M:%S').date(),
                     ret.index.values)
     else:
-        tdate = map(lambda x:datetime.strptime(x, '%Y/%m/%d').date(),
+        tdate = map(lambda x:datetime.strptime(x, '%Y%m%d').date(),
                     ret.index.values)
 
-    font = FontProperties(fname='/Library/Fonts/hwxh.ttf')  #  设置中文字体
-
-    plt.figure(1,figsize=(16,8))
-    #pcumret = plt.subplot(1,1,1)
-    plt.plot(tdate, cumret.values, color='b')
-    plt.legend(loc=2)
-    plt.ylabel(u'累计收益率', fontproperties=font,fontsize=16)
-    plt.title(u'蓝线为累计收益率，红线为标的',fontproperties=font,fontsize=16)
+    Fig = plt.figure(figsize=(20,10))
+    pcumret = plt.subplot(3,1,1)
+    pcumret.plot(tdate, cumret.values, label='Cumret', color='b', )
+    pcumret.legend(loc=2)
+    pcumret.set_ylabel('Cumret', fontsize=16)
+    pcumret.set_title(u'Blue is Cumret, red is Price',fontsize=16)
     pprice=plt.twinx()
 
     ###创建公用的y坐标轴
-    pprice.plot(tdate,price.values,color='r')
+    pprice.plot(tdate,price.values, label='Price',color='r')
     pprice.legend(loc=0)
-    pprice.set_ylabel(u'标的价格', fontproperties=font,fontsize=16)
+    pprice.set_ylabel('Price', fontsize=16)
 
     ### 最大回撤
-    plt.figure(2,figsize=(16,8))
-    plt.ylabel(u"最大回撤", fontproperties=font,fontsize=16)
+    pDD = plt.subplot(3, 1, 2)
+    pDD.set_ylabel("Drawdown", fontsize=16)
     [_, _, drawdownList]=MaxDD(cumret)
-    plt.fill_between(tdate, drawdownList, color='r')
-    plt.title(u"最大回撤", fontproperties=font,fontsize=16)
+    pDD.fill_between(tdate, drawdownList, color='r')
+    pDD.set_title(u'Drawdown',fontsize=16)
     pdown = plt.twinx()
-    pdown.plot(tdate, cumret.values, color='b')
+    pdown.plot(tdate, cumret.values, label='Cumret', color='b', )
     pdown.legend(loc=2)
-    pdown.set_ylabel(u'累计收益率', fontproperties=font,fontsize=16)
+    pdown.set_ylabel('Cumret', fontsize=16)
     ### 每笔收益
     _,Pnl = stratanalyz(Accountsummny)
-    plt.figure(3,figsize=(16,8))
-    plt.ylabel(u"每笔盈亏", fontproperties=font,fontsize=16)
-    plt.bar(range(len(Pnl)),Pnl ,color='b')
-    plt.title(u"每笔盈亏", fontproperties=font,fontsize=16)
-
+    pPnl = plt.subplot(3, 1, 3)
+    pPnl.set_ylabel("Pnl",fontsize=16)
+    pPnl.bar(range(len(Pnl)),Pnl ,color='b')
+    pPnl.set_title(u'PnL',fontsize=16)
     plt.show()
     if save == True:
         plt.savefig('Record.png')
